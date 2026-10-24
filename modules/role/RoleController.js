@@ -1,0 +1,48 @@
+
+const RoleService = require('./RoleService');
+
+const getAll = async (req, res) => {
+  const result = await RoleService.getAll();
+  res.json(result);
+};
+
+const getById = async (req, res) => {
+  const result = await RoleService.getById(req.params.id);
+  res.json(result);
+};
+
+const create = async (req, res) => {
+  const result = await RoleService.create(req.body);
+  res.json(result);
+};
+
+const update = async (req, res) => {
+  const result = await RoleService.update(req.params.id, req.body);
+  res.json(result);
+};
+
+const deleteOne = async (req, res) => {
+  const result = await RoleService.delete(req.params.id);
+  res.json(result);
+};
+
+
+const bulkInsert = async (req, res) => {
+  const result = await RoleService.bulkInsert(req.body);
+  res.json(result);
+};
+
+const bulkUpdate = async (req, res) => {
+  const result = await RoleService.bulkUpdate(req.body);
+  res.json(result);
+};
+
+
+module.exports = {
+  getAll,
+  getById,
+  create,
+  update,
+  deleteOne,
+  bulkInsert, bulkUpdate
+};
