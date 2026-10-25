@@ -1,6 +1,6 @@
 
 const BaseModel = require('../../model/AppModel');
-const response = require('../Responses/Response');
+const response = require('../../Responses/Response');
 const SubscriptionPlanModel = require('./SubscriptionPlanModel');
 
 const SubscriptionPlan = BaseModel(SubscriptionPlanModel);

@@ -323,3 +323,57 @@ VALUES
 ('basic', 'Basic Plan', 'For small businesses', 499.00, 'monthly', NULL, 5, 1),
 ('pro', 'Pro Plan', 'For growing businesses', 1999.00, 'monthly', NULL, 50, 10),
 ('enterprise', 'Enterprise Plan', 'Unlimited access for large companies', 9999.00, 'yearly', NULL, NULL, NULL);
+
+
+ALTER TABLE subscription_plans
+    ADD COLUMN duration_days INT NULL AFTER billing_cycle;
+
+ALTER TABLE subscription_plans
+    MODIFY COLUMN billing_cycle
+        ENUM('trial', 'monthly', 'yearly') DEFAULT 'monthly';
+        
+INSERT INTO subscription_plans (
+    id, plan_code, plan_name, description,
+    price, billing_cycle, duration_days,
+    max_users, max_branches
+) VALUES
+(1, 'trial', 'Trial Plan', '14-day trial', 0.00, 'trial', 14, 5, 1),
+(2, 'basic', 'Basic Plan', 'Small business', 499.00, 'monthly', NULL, 5, 1),
+(3, 'pro', 'Pro Plan', 'Growing business', 1999.00, 'monthly', NULL, 50, 10),
+(4, 'enterprise', 'Enterprise Plan', 'Large business', 9999.00, 'yearly', NULL, NULL, NULL);
+
+
+ALTER TABLE branches
+  ADD COLUMN district VARCHAR(100) NULL AFTER address,
+  ADD COLUMN taluk VARCHAR(100) NULL AFTER district;
+
+  ALTER TABLE roles
+    ADD COLUMN company_id INT NULL AFTER id,
+    MODIFY COLUMN branch_id INT NULL;
+
+    ALTER TABLE roles
+    MODIFY COLUMN company_id INT NOT NULL,
+    ADD CONSTRAINT fk_roles_company
+        FOREIGN KEY (company_id) REFERENCES companies(id);
+
+INSERT INTO role_types
+    (role_code, role_name, description, active, deleted, created, modified)
+VALUES
+    ('admin', 'Administrator','Manage company settings, users, branches and permissions',1, 0, NOW(), NOW()),
+    ('manager', 'Manager','Manage daily operations and assigned business functions',1, 0, NOW(), NOW()),
+    ('supervisor', 'Supervisor','Supervise staff and monitor daily operations',1, 0, NOW(), NOW()),
+    ('staff', 'Staff','Perform assigned operational tasks',1, 0, NOW(), NOW()),
+    ('accountant', 'Accountant','Manage permitted billing, accounting and financial functions',1, 0, NOW(), NOW()),
+    ('viewer', 'Viewer','View permitted information without editing',1, 0, NOW(), NOW(),
+    ('organization_admin','Organization Admin','Manage the organization, all its businesses and branches, users, roles, permissions and subscription',1,0,NOW(),NOW()));
+
+INSERT INTO business_types
+    (type_code, type_name, description, active, deleted, created, modified)
+VALUES
+    ('medical', 'Medical Store','Medical shops and pharmacies', 1, 0, NOW(), NOW()),
+    ('hospital', 'Hospital','Hospitals and healthcare organizations', 1, 0, NOW(), NOW()),
+    ('departmental', 'Departmental Store','Departmental and retail stores', 1, 0, NOW(), NOW()),
+    ('restaurant', 'Restaurant','Restaurants and food service businesses', 1, 0, NOW(), NOW());
+    
+ALTER TABLE companies
+ADD CONSTRAINT uq_companies_email UNIQUE (email);

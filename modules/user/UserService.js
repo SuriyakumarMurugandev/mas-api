@@ -1,6 +1,6 @@
 
 const BaseModel = require('../../model/AppModel');
-const response = require('../Responses/Response');
+const response = require('../../Responses/Response');
 const UserModel = require('./UserModel');
 
 const User = BaseModel(UserModel);

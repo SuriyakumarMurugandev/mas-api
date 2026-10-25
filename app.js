@@ -31,9 +31,9 @@ app.get('/', (req, res) => {
 
 // ✅ Apply global auth handler
 app.use(authWrapper);
-
+  
 // ✅ Routes
-app.use('/api', require('./routes/route'));
+app.use('/', require('./routes/route'));
 
 // ✅ Global error handler
 app.use((err, req, res, next) => {

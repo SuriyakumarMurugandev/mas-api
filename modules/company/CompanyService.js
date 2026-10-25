@@ -1,6 +1,6 @@
 
 const BaseModel = require('../../model/AppModel');
-const response = require('../Responses/Response');
+const response = require('../../Responses/Response');
 const CompanyModel = require('./CompanyModel');
 
 const Company = BaseModel(CompanyModel);

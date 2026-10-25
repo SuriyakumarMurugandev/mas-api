@@ -1,6 +1,6 @@
 
 const BaseModel = require('../../model/AppModel');
-const response = require('../Responses/Response');
+const response = require('../../../Responses/Response');
 const BranchModel = require('./BranchModel');
 
 const Branch = BaseModel(BranchModel);
