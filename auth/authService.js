@@ -427,41 +427,236 @@ console.log("check role data: ",adminRoleType)
   },
 
   // ✅ LOGIN
-  async login(email, password) {
+// AuthService.js
 
-    // ✅ get user
-    const users = await userModel.query(
-      `SELECT * FROM ${UserModel.table} WHERE email = ? AND active = 1 AND deleted = 0`,
-      [email]
-    );
+async login(email, password) {
+  // 1. Find and validate user
+  const users = await userModel.query(
+    `SELECT id, company_id, branch_id, role_id, user_name,
+            email, password_hash, active, deleted
+     FROM users
+     WHERE email = ?
+       AND active = 1
+       AND deleted = 0
+     LIMIT 1`,
+    [email]
+  );
 
-    if (!users.length) {
-      throw new Error('User not found');
-    }
-
-    const user = users[0];
-
-    // ✅ compare password
-    const isMatch = await bcrypt.compare(password, user.password);
-
-    if (!isMatch) {
-      throw new Error('Invalid password');
-    }
-
-    // ✅ create token
-    const token = jwt.sign(
-      {
-        id: user.id,
-        email: user.email
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: '1d' }
-    );
-
-    return {
-      token
-    };
+  if (!users.length) {
+    throw new Error("Invalid email or password");
   }
+
+  const user = users[0];
+
+  const passwordMatches = await bcrypt.compare(
+    password,
+    user.password_hash
+  );
+
+  if (!passwordMatches) {
+    throw new Error("Invalid email or password");
+  }
+
+  // 2. Check company subscription
+  const subscriptions = await userModel.query(
+    `SELECT cs.id AS subscription_id,
+            cs.plan_id,
+            cs.start_date,
+            cs.end_date,
+            cs.status AS subscription_status,
+            sp.plan_code,
+            sp.plan_name,
+            sp.max_users,
+            sp.max_branches
+     FROM company_subscriptions cs
+     INNER JOIN subscription_plans sp
+       ON sp.id = cs.plan_id
+      AND sp.active = 1
+      AND sp.deleted = 0
+     WHERE cs.company_id = ?
+       AND cs.active = 1
+       AND cs.deleted = 0
+       AND cs.status = 'active'
+       AND cs.start_date <= CURDATE()
+       AND cs.end_date >= CURDATE()
+     ORDER BY cs.end_date DESC
+     LIMIT 1`,
+    [user.company_id]
+  );
+
+  if (!subscriptions.length) {
+    throw new Error(
+      "Your company's subscription is inactive or expired"
+    );
+  }
+
+  const subscription = subscriptions[0];
+
+  // 3. Resolve accessible branches and branch-specific roles
+  const branchAccess = await userModel.query(
+    `SELECT ua.branch_id,
+            ua.role_id,
+            b.branch_name,
+            r.role_type_id,
+            rt.role_code,
+            rt.role_name
+     FROM user_access ua
+     INNER JOIN branches b
+       ON b.id = ua.branch_id
+      AND b.company_id = ua.company_id
+      AND b.active = 1
+      AND b.deleted = 0
+     INNER JOIN roles r
+       ON r.id = ua.role_id
+      AND r.company_id = ua.company_id
+      AND r.branch_id = ua.branch_id
+      AND r.active = 1
+      AND r.deleted = 0
+     INNER JOIN role_types rt
+       ON rt.id = r.role_type_id
+      AND rt.active = 1
+      AND rt.deleted = 0
+     WHERE ua.user_id = ?
+       AND ua.company_id = ?
+       AND ua.active = 1
+       AND ua.deleted = 0`,
+    [user.id, user.company_id]
+  );
+
+  if (!branchAccess.length) {
+    throw new Error("No active branch access is assigned to this user");
+  }
+
+  // 4. Organization Admin has unrestricted role-level menu access.
+  // Subscription restrictions still apply.
+  const isOrganizationAdmin = branchAccess.some(
+    (branch) => branch.role_code === "organization_admin"
+  );
+
+  // 5. Get the menus included in the subscribed plan
+
+// 1. Load all menus enabled for this company.
+const companyMenus = await userModel.query(
+  `SELECT DISTINCT
+      m.id,
+      m.key_name AS menu_code,
+      m.label AS menu_name,
+      m.icon,
+      m.image_url,
+      m.route,
+      m.parent_id,
+      m.menu_category_id,
+      m.is_default
+   FROM company_menus cm
+   INNER JOIN menus m
+     ON m.id = cm.menu_id
+    AND m.company_id = cm.company_id
+    AND m.active = 1
+    AND m.deleted = 0
+   WHERE cm.company_id = ?
+     AND cm.active = 1
+     AND cm.deleted = 0
+   ORDER BY m.parent_id, m.id`,
+  [user.company_id]
+);
+
+// 2. Build menu permissions for every accessible branch.
+const branches = [];
+
+for (const branch of branchAccess) {
+  let allowedMenus;
+
+  if (branch.role_code === "organization_admin") {
+    // Organization Admin gets all menus enabled for the company.
+    allowedMenus = companyMenus;
+  } else {
+    // Other roles get only menus granted to their branch role.
+    allowedMenus = await userModel.query(
+      `SELECT DISTINCT
+          m.id,
+          m.key_name AS menu_code,
+          m.label AS menu_name,
+          m.icon,
+          m.image_url,
+          m.route,
+          m.parent_id,
+          m.menu_category_id,
+          m.is_default,
+          rma.can_view,
+          rma.can_edit
+       FROM role_menu_access rma
+       INNER JOIN menus m
+         ON m.id = rma.menu_id
+        AND m.company_id = rma.company_id
+        AND m.active = 1
+        AND m.deleted = 0
+       INNER JOIN company_menus cm
+         ON cm.company_id = rma.company_id
+        AND cm.menu_id = m.id
+        AND cm.active = 1
+        AND cm.deleted = 0
+       WHERE rma.company_id = ?
+         AND rma.role_id = ?
+         AND rma.active = 1
+         AND rma.deleted = 0
+         AND rma.can_view = 1
+       ORDER BY m.parent_id, m.id`,
+      [user.company_id, branch.role_id]
+    );
+  }
+
+  branches.push({
+    branchId: branch.branch_id,
+    branchName: branch.branch_name,
+    roleId: branch.role_id,
+    roleCode: branch.role_code,
+    roleName: branch.role_name,
+    menus: allowedMenus,
+  });
+}
+
+  // 7. Create a JWT containing identity only.
+  // Re-check permissions and subscription in protected APIs.
+  const token = jwt.sign(
+    {
+      id: user.id,
+      companyId: user.company_id,
+    },
+    process.env.JWT_SECRET,
+    { expiresIn: "1d" }
+  );
+
+  // 8. Return session information to the frontend
+  return {
+    success: true,
+    message: "Login successful",
+    token,
+    data: {
+      user: {
+        id: user.id,
+        userName: user.user_name,
+        email: user.email,
+        companyId: user.company_id,
+        isOrganizationAdmin,
+      },
+      subscription: {
+        id: subscription.subscription_id,
+        planId: subscription.plan_id,
+        planCode: subscription.plan_code,
+        planName: subscription.plan_name,
+        status: subscription.subscription_status,
+        startDate: subscription.start_date,
+        endDate: subscription.end_date,
+      },
+      branches,
+      defaultBranchId: branches.some(
+        (branch) => branch.branchId === user.branch_id
+      )
+        ? user.branch_id
+        : branches[0].branchId,
+    },
+  };
+}
 
 };
 

@@ -43,7 +43,7 @@ if (process.env.NODE_ENV === 'production') {
         console.log('HTTPS Server running on port 443');
     });
 } else {
-    http.createServer(app).listen(3000, () => {
-        console.log('HTTP Server running on port 3000');
+    http.createServer(app).listen(process.env.PORT, () => {
+        console.log(`HTTP Server running on port ${process.env.PORT}`);
     });
 }
